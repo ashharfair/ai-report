@@ -1,0 +1,23 @@
+{
+  "name": "custom-ai",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.11.3",
+    "cors": "^2.8.5",
+    "docx": "^9.5.1",
+    "docxtemplater": "^3.47.2",
+    "express": "^4.19.2",
+    "mammoth": "^1.7.1",
+    "multer": "^1.4.5-lts.1",
+    "pizzip": "^3.1.7",
+    "xmldom": "^0.6.0"
+  }
+}
