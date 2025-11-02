@@ -16,31 +16,17 @@ const port = 3000;
 const GOOGLE_API_KEY = "AIzaSyClmusFjx_AViVSfe5Tzmtj2gyYxFTIc4g"; // 🔒 store in env variable ideally
 const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-// ensure uploadsDir exists (you already have this)
-const uploadsDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 
-// multer storage — use originalname or a sanitized timestamped name
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    // create a safer filename: timestamp + original name
-    const safeName = `${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
-    cb(null, safeName);
-  },
-});
-const upload = multer({ storage });
+
+
+const uploadInMemory = multer({ storage: multer.memoryStorage() });
 
 // Upload endpoint: return the saved filename (fileId)
-app.post("/upload-template", upload.single("template"), async (req, res) => {
+app.post("/upload-template", uploadInMemory.single("template"), async (req, res) => {
   if (!req.file) return res.status(400).send("No file uploaded.");
 
-  // `req.file.filename` is the filename saved under uploadsDir
-  const savedFilename = req.file.filename; // e.g. "169xxx-template.docx"
   try {
-    const content = fs.readFileSync(path.join(uploadsDir, savedFilename), "binary");
+    const content = req.file.buffer;
     const zip = new PizZip(content);
     const xml = zip.file("word/document.xml").asText();
 
@@ -57,10 +43,8 @@ app.post("/upload-template", upload.single("template"), async (req, res) => {
       }
     });
 
-    // Return the saved filename as the fileId (client will send this back)
     res.json({
       fields: headings,
-      fileId: savedFilename,
     });
   } catch (err) {
     console.error("Error extracting headings:", err);
@@ -71,10 +55,10 @@ app.post("/upload-template", upload.single("template"), async (req, res) => {
 // ------------------------------------
 // 2️⃣ Enhance + Insert Back into DOCX
 // ------------------------------------
-app.post("/generate-new-report", async (req, res) => {
-  const { fileId, userInputs } = req.body;
-  if (!fileId || !userInputs) return res.status(400).send("Missing fileId or userInputs.");
-  let filePath = fileId;
+app.post("/generate-new-report", uploadInMemory.single("template"), async (req, res) => {
+  const { userInputs } = req.body;
+  if (!req.file || !userInputs) return res.status(400).send("Missing template file or userInputs.");
+  const templateBuffer = req.file.buffer;
   try {
     // --- 1) Call AI to polish (same as before) ---
     const prompt = `
@@ -125,8 +109,7 @@ ${JSON.stringify(userInputs, null, 2)}
     }
 
     // --- 2) Load DOCX and parse document.xml ---
-    const content = fs.readFileSync(`uploads/${filePath}`, "binary");
-    const zip = new PizZip(content);
+    const zip = new PizZip(templateBuffer);
     const xml = zip.file("word/document.xml").asText();
 
     const parser = new DOMParser();
